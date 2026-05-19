@@ -112,7 +112,5 @@ export const FAMOUS_PERSONS: string[] = [
   "Mother Teresa",
   "Gautama Buddha",
   "Lord Krishna",
-  "Lord Rama",
-  "Dalai Lama",
   "Pope Francis"
 ];
