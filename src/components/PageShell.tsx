@@ -30,7 +30,7 @@ export function PageShell({
           pointerEvents: "none",
         }}
       >
-        <BackgroundBeamsWithCollision className="w-full h-full" />
+        <BackgroundBeamsWithCollision className="w-full h-full">{null}</BackgroundBeamsWithCollision>
       </div>
 
       {/* Scrollable content column on top, z=10 */}
@@ -101,3 +101,4 @@ export function PageShell({
     </div>
   );
 }
+
