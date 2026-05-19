@@ -522,7 +522,7 @@ export default function App() {
   // HOME
   if (screen === "home") {
     return (
-      <PageShell eyebrow="Stiff Socks × BradyYourTutor" title="Guess Your Person">
+      <PageShell eyebrow="Welcome to" title="Who Am I?">
         <Panel>
           <Row first>
             <Input value={playerName} onChange={(v) => { setPlayerName(v); setError(""); }}
