@@ -10,7 +10,13 @@
 
 export const FAMOUS_PERSONS: string[] = [
   "Adolf Hitler",
-  "BradyYourTutor",
+  "Sheik Mujibur Rahman",
+  "Tarek Zia",
+  "Mark Zuckerburg",
+  "Isaac Newton",
+  "Albert Einstein",
+  "Nicola Tesla",
+  "Chistiano Ronaldo",
   "MrBeast",
   "PewDiePie",
   "Osama bin Laden",
