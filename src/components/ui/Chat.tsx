@@ -89,9 +89,6 @@ export function Chat({
 
   return (
     <>
-      {/* Backdrop */}
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.4)" }} />
-
       {/* Chat card — dark inverted from the spec */}
       <div style={{
         position: "fixed",

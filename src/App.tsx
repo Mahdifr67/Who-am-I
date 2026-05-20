@@ -70,8 +70,9 @@ interface GameState {
 }
 
 // ── TIMER ─────────────────────────────────────────────────────────────────────
-const TIMER_MS        = 30_000; // 30 s for voting phases
-const PLAYING_TIMER_MS = 60_000; // 60 s for the asking phase
+const TIMER_MS        = 60_000; // 60 s for voting phases
+const PLAYING_TIMER_MS = 90_000; // 90 s for the asking phase
+const RESULTS_TIMER_MS = 60_000; // 60 s for results screen
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function generateCode() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
@@ -228,6 +229,30 @@ export default function App() {
       }
     }
 
+    // Also handle the results_shown timer — auto-advance if asker doesn't click
+    if (phase === "results_shown") {
+      const timerUp = !!(gameState.timerEndsAt && Date.now() >= gameState.timerEndsAt);
+      if (timerUp && gameState.currentTurnPlayerId) {
+        async function advanceResults() {
+          const lockKey = `t:results:${gameState!.timerEndsAt}`;
+          const lockRef = ref(db, `games/${gameCode}/resolveLock`);
+          await runTransaction(lockRef, (current) => {
+            if (current === lockKey) return;
+            return lockKey;
+          }).then(async (result) => {
+            if (!result.committed) return;
+            const snap = await get(ref(db, `games/${gameCode}`));
+            if (!snap.exists()) return;
+            const gs = snap.val() as GameState;
+            if (gs.phase !== "results_shown") return;
+            await advanceTurn(gs, gs.currentTurnPlayerId!);
+          });
+        }
+        advanceResults();
+      }
+      return;
+    }
+
     // Also handle the playing phase timer (asker took too long → skip their turn)
     if (phase === "playing") {
       const { timerEndsAt } = gameState;
@@ -303,6 +328,8 @@ export default function App() {
     const state = snap.val() as GameState;
     if (state.phase !== "lobby") return setError("Game already started");
     if (Object.keys(state.players || {}).length >= 12) return setError("Game is full (max 12)");
+    const existingNames = Object.values(state.players || {}).map((p: any) => p.name.trim().toLowerCase());
+    if (existingNames.includes(playerName.trim().toLowerCase())) return setError("That name is already taken in this game");
     const pid = push(ref(db, "players")).key!;
     await update(ref(db, `games/${code}/players`), { [pid]: { id: pid, name: playerName.trim(), isHost: false } });
     setPlayerId(pid); setGameCode(code); setScreen("game");
@@ -432,7 +459,7 @@ export default function App() {
         return;
       }
     }
-    await update(ref(db, `games/${gameCode}`), { phase: "results_shown" });
+    await update(ref(db, `games/${gameCode}`), { phase: "results_shown", timerEndsAt: Date.now() + RESULTS_TIMER_MS });
   }
 
   async function advanceTurn(gs: GameState, currentPlayerId: string) {
@@ -459,6 +486,14 @@ export default function App() {
     if (!gameState) return;
     await advanceTurn(gameState, gameState.currentTurnPlayerId!);
     showToast("Next turn!", "info");
+  }
+
+  async function kickPlayer(targetId: string) {
+    if (!gameState || !isHost || targetId === playerId) return;
+    const updatedPlayers = { ...gameState.players };
+    delete updatedPlayers[targetId];
+    await update(ref(db, `games/${gameCode}`), { players: updatedPlayers });
+    showToast("Player kicked", "info");
   }
 
   async function voteWinnerCheck(vote: string) {
@@ -574,16 +609,36 @@ export default function App() {
     />
   );
 
-  function PlayerList() {
+  function PlayerList({ showKick = false }: { showKick?: boolean }) {
     return (
       <>
         {allPlayers.map((p) => (
-          <PlayerRow
-            key={p.id}
-            p={p}
-            isCurrent={gameState!.currentTurnPlayerId === p.id}
-            isMe={p.id === playerId}
-          />
+          <div key={p.id} style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <PlayerRow
+                p={p}
+                isCurrent={gameState!.currentTurnPlayerId === p.id}
+                isMe={p.id === playerId}
+              />
+            </div>
+            {showKick && isHost && p.id !== playerId && (
+              <button
+                onClick={() => kickPlayer(p.id)}
+                style={{
+                  position: "absolute", right: 16,
+                  background: "none", border: "1px solid #555",
+                  borderRadius: 6, color: "#aaa", fontSize: 11,
+                  padding: "3px 8px", cursor: "pointer",
+                  fontFamily: FONT, letterSpacing: "0.05em",
+                  textTransform: "uppercase" as const,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.red; e.currentTarget.style.color = T.red; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.color = "#aaa"; }}
+              >
+                kick
+              </button>
+            )}
+          </div>
         ))}
       </>
     );
@@ -612,7 +667,7 @@ export default function App() {
           <Row>
             <Label>Players ({allPlayers.length} / 12)</Label>
           </Row>
-          <PlayerList />
+          <PlayerList showKick={true} />
           <Row>
             {isHost
               ? allPlayers.length < 2
@@ -909,6 +964,13 @@ export default function App() {
                 </div>
               </div>
             ))}
+            <div style={{ marginTop: 14 }}>
+              <Timer
+                endsAt={gameState.timerEndsAt ?? Date.now()}
+                totalMs={RESULTS_TIMER_MS}
+                onExpire={undefined}
+              />
+            </div>
             {isAsker ? (
               <Btn onClick={acknowledgeResults} style={{ width: "100%", marginTop: 14 }}>Next turn →</Btn>
             ) : (
